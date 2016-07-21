@@ -27,6 +27,7 @@ import org.wso2.siddhi.core.query.processor.Processor;
 import org.wso2.siddhi.core.query.processor.stream.window.FindableProcessor;
 import org.wso2.siddhi.core.query.selector.QuerySelector;
 import org.wso2.siddhi.core.util.collection.operator.Finder;
+import org.wso2.siddhi.core.util.lock.LockWrapper;
 
 import java.util.concurrent.locks.Lock;
 
@@ -36,11 +37,10 @@ import java.util.concurrent.locks.Lock;
 public class JoinProcessor implements Processor {
     private boolean trigger;
     private boolean leftJoinProcessor = false;
-    private boolean preJoinProcessor = false;
     private boolean outerJoinProcessor = false;
     private int matchingStreamIndex;
-    private Lock joinLock;
-
+    private LockWrapper joinLockWrapper;
+    private boolean preJoinProcessor;
     private StateEventPool stateEventPool;
     private Finder finder;
     private FindableProcessor findableProcessor;
@@ -71,7 +71,7 @@ public class JoinProcessor implements Processor {
                 StreamEvent streamEvent = nextEvent;
                 nextEvent = streamEvent.getNext();
                 streamEvent.setNext(null);
-                joinLock.lock();
+                joinLockWrapper.lock();
                 try {
                     ComplexEvent.Type eventType = streamEvent.getType();
                     if (eventType == ComplexEvent.Type.TIMER) {
@@ -104,7 +104,7 @@ public class JoinProcessor implements Processor {
                         }
                     }
                 } finally {
-                    joinLock.unlock();
+                    joinLockWrapper.unlock();
                 }
                 if (returnEventChunk.getFirst() != null) {
                     selector.process(returnEventChunk);
@@ -113,11 +113,11 @@ public class JoinProcessor implements Processor {
             }
         } else {
             if (preJoinProcessor) {
-                joinLock.lock();
+                joinLockWrapper.lock();
                 try {
                     nextProcessor.process(complexEventChunk);
                 } finally {
-                    joinLock.unlock();
+                    joinLockWrapper.unlock();
                 }
             }
         }
@@ -143,8 +143,8 @@ public class JoinProcessor implements Processor {
         nextProcessor = processor;
     }
 
-    public void setJoinLock(Lock joinLock) {
-        this.joinLock = joinLock;
+    public void setJoinLock(LockWrapper joinLockWrapper) {
+        this.joinLockWrapper = joinLockWrapper;
     }
 
     /**

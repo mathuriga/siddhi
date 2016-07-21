@@ -52,8 +52,6 @@ import org.wso2.siddhi.query.api.expression.constant.TimeConstant;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class JoinInputStreamParser {
 
@@ -173,7 +171,6 @@ public class JoinInputStreamParser {
                 break;
         }
 
-        Lock joinLock = new ReentrantLock();
         JoinProcessor leftPreJoinProcessor = new JoinProcessor(true, true, leftOuterJoinProcessor, 0);
         JoinProcessor leftPostJoinProcessor = new JoinProcessor(true, false, leftOuterJoinProcessor, 0);
 
@@ -185,14 +182,10 @@ public class JoinInputStreamParser {
         FindableProcessor rightFindableProcessor = insertJoinProcessorsAndGetFindable(rightPreJoinProcessor, rightPostJoinProcessor, rightStreamRuntime, executionPlanContext, outputExpectsExpiredEvents,queryName);
 
         leftPreJoinProcessor.setFindableProcessor(rightFindableProcessor);
-        leftPreJoinProcessor.setJoinLock(joinLock);
         leftPostJoinProcessor.setFindableProcessor(rightFindableProcessor);
-        leftPostJoinProcessor.setJoinLock(joinLock);
 
         rightPreJoinProcessor.setFindableProcessor(leftFindableProcessor);
-        rightPreJoinProcessor.setJoinLock(joinLock);
         rightPostJoinProcessor.setFindableProcessor(leftFindableProcessor);
-        rightPostJoinProcessor.setJoinLock(joinLock);
 
         Expression compareCondition = joinInputStream.getOnCompare();
         if (compareCondition == null) {
@@ -226,6 +219,7 @@ public class JoinInputStreamParser {
         joinStreamRuntime.addRuntime(rightStreamRuntime);
         return joinStreamRuntime;
     }
+
 
     private static FindableProcessor insertJoinProcessorsAndGetFindable(JoinProcessor preJoinProcessor,
                                                                         JoinProcessor postJoinProcessor,
