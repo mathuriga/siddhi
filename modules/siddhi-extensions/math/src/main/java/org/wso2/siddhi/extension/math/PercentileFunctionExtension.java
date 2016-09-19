@@ -25,14 +25,11 @@ import org.wso2.siddhi.core.executor.ExpressionExecutor;
 import org.wso2.siddhi.query.api.definition.Attribute;
 import org.wso2.siddhi.core.query.selector.attribute.aggregator.AttributeAggregator;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
- * AttributeAggregator which implements the following function.
- * <code>percentile(value, p)</code>
- * Returns an estimate for the pth percentile of the stored values.
+ * percentile(value, p)
+ * Returns an estimate for the pth percentile of the stored values
  * Accept Type(s): value: FLOAT,INT,LONG,DOUBLE / p: DOUBLE
  * Return Type: DOUBLE
  */
@@ -41,16 +38,22 @@ public class PercentileFunctionExtension extends AttributeAggregator {
     private PercentileFunctionExtension percentileOutputFunctionExtension;
     private double percentileValue;
 
+    /**
+     * The initialization method for FunctionExecutor
+     *
+     * @param attributeExpressionExecutors are the executors of each attributes in the function
+     * @param executionPlanContext Execution plan runtime context
+     */
     @Override
     protected void init(ExpressionExecutor[] attributeExpressionExecutors, ExecutionPlanContext executionPlanContext) {
 
         if (attributeExpressionExecutors.length != 2) {
             throw new OperationNotSupportedException("Percentile function has to have exactly 2 parameter, currently "
-                    + attributeExpressionExecutors.length + " parameters provided.");
+                    + attributeExpressionExecutors.length + " parameters provided");
         }
 
         if (!(attributeExpressionExecutors[1] instanceof ConstantExpressionExecutor)) {
-            throw new OperationNotSupportedException("Percentile value has to be a constant.");
+            throw new OperationNotSupportedException("Percentile value has to be a constant");
         }
 
         Object percentileValueObject = attributeExpressionExecutors[1].execute(null);
@@ -69,20 +72,20 @@ public class PercentileFunctionExtension extends AttributeAggregator {
         Attribute.Type type = attributeExpressionExecutors[0].getReturnType();
 
         switch (type) {
-            case FLOAT:
-                percentileOutputFunctionExtension = new PercentileFunctionExtensionFloat();
-                break;
-            case INT:
-                percentileOutputFunctionExtension = new PercentileFunctionExtensionInt();
-                break;
-            case LONG:
-                percentileOutputFunctionExtension = new PercentileFunctionExtensionLong();
-                break;
-            case DOUBLE:
-                percentileOutputFunctionExtension = new PercentileFunctionExtensionDouble();
-                break;
-            default:
-                throw new OperationNotSupportedException("Percentile not supported for " + type);
+        case FLOAT:
+            percentileOutputFunctionExtension = new PercentileFunctionExtensionFloat();
+            break;
+        case INT:
+            percentileOutputFunctionExtension = new PercentileFunctionExtensionInt();
+            break;
+        case LONG:
+            percentileOutputFunctionExtension = new PercentileFunctionExtensionLong();
+            break;
+        case DOUBLE:
+            percentileOutputFunctionExtension = new PercentileFunctionExtensionDouble();
+            break;
+        default:
+            throw new OperationNotSupportedException("Percentile not supported for " + type);
         }
     }
 
@@ -140,7 +143,7 @@ public class PercentileFunctionExtension extends AttributeAggregator {
     }
 
     /**
-     * Percentile calculation method.
+     * Percentile calculation method
      *
      * To calculate the pth percentile (where p is any number greater than 0 or less than or equal to 100), do the
      * following steps:
@@ -175,16 +178,12 @@ public class PercentileFunctionExtension extends AttributeAggregator {
             }
         } else {
             percentileIndex = (int) Math.round(percentileIndexTemp);
-            if (percentileIndex == 0) {
-                return valuesList.get(percentileIndex);
-            } else {
-                return valuesList.get(percentileIndex - 1);
-            }
+            return valuesList.get(percentileIndex - 1);
         }
     }
 
     /**
-     * Adding values to the sorted ArrayList.
+     * Adding values to the sorted ArrayList
      *
      * @param arrayList sorted ArrayList
      * @param value new value
@@ -201,7 +200,7 @@ public class PercentileFunctionExtension extends AttributeAggregator {
     }
 
     /**
-     * Removing values from the sorted ArrayList.
+     * Removing values from the sorted ArrayList
      *
      * @param arrayList Sorted ArrayList
      * @param value expired value
@@ -209,12 +208,15 @@ public class PercentileFunctionExtension extends AttributeAggregator {
     public void sortedArrayListRemove(List<Double> arrayList, double value) {
 
         int removeIndex = Collections.binarySearch(arrayList, value);
+
         arrayList.remove(removeIndex);
+
     }
 
     class PercentileFunctionExtensionDouble extends PercentileFunctionExtension {
 
         private final Attribute.Type type = Attribute.Type.DOUBLE;
+        private long count = 0;
         private List<Double> valuesList = new ArrayList<Double>();
 
         @Override
@@ -224,38 +226,57 @@ public class PercentileFunctionExtension extends AttributeAggregator {
 
         @Override
         public Object processAdd(Object[] data) {
+            count++;
+            if (count == 0) {
+                return 0.0;
+            }
+
             double value = (Double) data[0];
+
             sortedArrayListAdd(valuesList, value);
+
             return getPercentileValue(valuesList, percentileValue);
         }
 
         @Override
         public Object processRemove(Object[] data) {
+            count--;
+            if (count == 0) {
+                return 0.0;
+            }
+
             double value = (Double) data[0];
+
             sortedArrayListRemove(valuesList, value);
+
             return getPercentileValue(valuesList, percentileValue);
         }
 
         @Override
         public Object reset() {
+            count = 0;
             valuesList.clear();
             return 0.0;
         }
 
         @Override
         public Object[] currentState() {
-            return new Object[] { valuesList};
+            return new Object[] { new AbstractMap.SimpleEntry<String, Object>("ValueList",valuesList),new AbstractMap.SimpleEntry<String, Object>("Count", count)};
         }
 
         @Override
         public void restoreState(Object[] state) {
-            valuesList = (List) state[0];
+            Map.Entry<String, Object> stateEntry = (Map.Entry<String, Object>) state[0];
+            valuesList = (List) stateEntry.getValue();
+            Map.Entry<String, Object> stateEntry2 = (Map.Entry<String, Object>) state[1];
+            count = (Long) stateEntry2.getValue();
         }
     }
 
     class PercentileFunctionExtensionFloat extends PercentileFunctionExtension {
 
         private final Attribute.Type type = Attribute.Type.DOUBLE;
+        private long count = 0;
         private List<Double> valuesList = new ArrayList<Double>();
 
         @Override
@@ -265,38 +286,57 @@ public class PercentileFunctionExtension extends AttributeAggregator {
 
         @Override
         public Object processAdd(Object[] data) {
+            count++;
+            if (count == 0) {
+                return 0.0;
+            }
+
             double value = (Float) data[0];
+
             sortedArrayListAdd(valuesList, value);
+
             return getPercentileValue(valuesList, percentileValue);
         }
 
         @Override
         public Object processRemove(Object[] data) {
+            count--;
+            if (count == 0) {
+                return 0.0;
+            }
+
             double value = (Float) data[0];
+
             sortedArrayListRemove(valuesList, value);
+
             return getPercentileValue(valuesList, percentileValue);
         }
 
         @Override
         public Object reset() {
+            count = 0;
             valuesList.clear();
             return 0.0;
         }
 
         @Override
         public Object[] currentState() {
-            return new Object[] { valuesList};
+            return new Object[] { new AbstractMap.SimpleEntry<String, Object>("ValueList",valuesList),new AbstractMap.SimpleEntry<String, Object>("Count", count)};
         }
 
         @Override
         public void restoreState(Object[] state) {
-            valuesList = (List) state[0];
+            Map.Entry<String, Object> stateEntry = (Map.Entry<String, Object>) state[0];
+            valuesList = (List) stateEntry.getValue();
+            Map.Entry<String, Object> stateEntry2 = (Map.Entry<String, Object>) state[1];
+            count = (Long) stateEntry2.getValue();
         }
     }
 
     class PercentileFunctionExtensionInt extends PercentileFunctionExtension {
 
         private final Attribute.Type type = Attribute.Type.DOUBLE;
+        private long count = 0;
         private List<Double> valuesList = new ArrayList<Double>();
 
         @Override
@@ -306,38 +346,58 @@ public class PercentileFunctionExtension extends AttributeAggregator {
 
         @Override
         public Object processAdd(Object[] data) {
+            count++;
+            if (count == 0) {
+                return 0.0;
+            }
+
             double value = (Integer) data[0];
+
             sortedArrayListAdd(valuesList, value);
+
             return getPercentileValue(valuesList, percentileValue);
         }
 
         @Override
         public Object processRemove(Object[] data) {
+            count--;
+            if (count == 0) {
+                return 0.0;
+            }
+
             double value = (Integer) data[0];
+
             sortedArrayListRemove(valuesList, value);
+
             return getPercentileValue(valuesList, percentileValue);
         }
 
         @Override
         public Object reset() {
+            count = 0;
             valuesList.clear();
             return 0.0;
         }
 
         @Override
         public Object[] currentState() {
-            return new Object[] { valuesList};
+            return new Object[] { new AbstractMap.SimpleEntry<String, Object>("ValueList",valuesList),new AbstractMap.SimpleEntry<String, Object>("Count", count)};
         }
 
         @Override
         public void restoreState(Object[] state) {
-            valuesList = (List) state[0];
+            Map.Entry<String, Object> stateEntry = (Map.Entry<String, Object>) state[0];
+            valuesList = (List) stateEntry.getValue();
+            Map.Entry<String, Object> stateEntry2 = (Map.Entry<String, Object>) state[1];
+            count = (Long) stateEntry2.getValue();
         }
+
     }
 
     class PercentileFunctionExtensionLong extends PercentileFunctionExtension {
 
         private final Attribute.Type type = Attribute.Type.DOUBLE;
+        private long count = 0;
         private List<Double> valuesList = new ArrayList<Double>();
 
         @Override
@@ -347,33 +407,52 @@ public class PercentileFunctionExtension extends AttributeAggregator {
 
         @Override
         public Object processAdd(Object[] data) {
+            count++;
+            if (count == 0) {
+                return 0.0;
+            }
+
             double value = (Long) data[0];
+
             sortedArrayListAdd(valuesList, value);
+
             return getPercentileValue(valuesList, percentileValue);
         }
 
         @Override
         public Object processRemove(Object[] data) {
+            count--;
+            if (count == 0) {
+                return 0.0;
+            }
+
             double value = (Long) data[0];
+
             sortedArrayListRemove(valuesList, value);
+
             return getPercentileValue(valuesList, percentileValue);
         }
 
         @Override
         public Object reset() {
+            count = 0;
             valuesList.clear();
             return 0.0;
         }
 
         @Override
         public Object[] currentState() {
-            return new Object[] { valuesList};
+            return new Object[] { new AbstractMap.SimpleEntry<String, Object>("ValueList",valuesList),new AbstractMap.SimpleEntry<String, Object>("Count", count)};
         }
 
         @Override
         public void restoreState(Object[] state) {
-            valuesList = (List) state[0];
+            Map.Entry<String, Object> stateEntry = (Map.Entry<String, Object>) state[0];
+            valuesList = (List) stateEntry.getValue();
+            Map.Entry<String, Object> stateEntry2 = (Map.Entry<String, Object>) state[1];
+            count = (Long) stateEntry2.getValue();
         }
+
     }
 
 }
